@@ -11,9 +11,12 @@ export interface MGLSettings {
   includeConditionCommands?: boolean;
 }
 
-const DEFAULT_TRAILER_X = 1585.33;
-const DEFAULT_TRAILER_Y = 0;
-const DEFAULT_ZX = 29.63;
+export type MGLDocumentUnit = 'px' | 'cm' | 'mm';
+
+const DEFAULT_TRAILER_X_MM = 1585.33;
+const DEFAULT_TRAILER_Y_MM = 0;
+const DEFAULT_ZX_MM = 29.63;
+const PLOTTER_UNITS_PER_MM = 40;
 
 const rotatePoint = (point: Point, center: Point, angleDeg: number): Point => {
   if (!angleDeg) {
@@ -35,14 +38,20 @@ const rotatePoint = (point: Point, center: Point, angleDeg: number): Point => {
 export class MGLConverter {
   private commands: string[] = [];
 
-  constructor(private readonly dpi = 300) {
+  constructor(
+    private readonly dpi = 300,
+    private readonly unit: MGLDocumentUnit = 'px'
+  ) {
     void this.dpi;
   }
 
   init(settings: MGLSettings = {}): void {
-    this.commands = ['IN;', 'IP0,0,1,1;', `ZX${this.format(DEFAULT_ZX)};`];
+    this.commands = ['IN;', 'IP0,0,1,1;', `ZX${this.formatMillimeters(DEFAULT_ZX_MM)};`];
 
     if (settings.includeConditionCommands) {
+      if (typeof settings.tool === 'string' && settings.tool.trim().length > 0) {
+        this.commands.push(`${settings.tool.trim()};`);
+      }
       if (typeof settings.speed === 'number' && settings.speed > 0) {
         this.commands.push(`VS${this.formatInteger(settings.speed)};`);
       }
@@ -118,9 +127,18 @@ export class MGLConverter {
     this.addPolyline(points, true);
   }
 
-  finish(trailerX = DEFAULT_TRAILER_X, trailerY = DEFAULT_TRAILER_Y): void {
+  finish(trailerX?: number, trailerY?: number): void {
     this.penUp();
-    this.commands.push(`;PU${this.format(trailerX)},${this.format(trailerY)};`);
+    const formattedTrailerX =
+      typeof trailerX === 'number'
+        ? this.format(trailerX)
+        : this.formatMillimeters(DEFAULT_TRAILER_X_MM);
+    const formattedTrailerY =
+      typeof trailerY === 'number'
+        ? this.format(trailerY)
+        : this.formatMillimeters(DEFAULT_TRAILER_Y_MM);
+
+    this.commands.push(`;PU${formattedTrailerX},${formattedTrailerY};`);
   }
 
   getOutput(): string {
@@ -141,10 +159,31 @@ export class MGLConverter {
   }
 
   private format(value: number): string {
-    return value.toFixed(2);
+    return this.toPlotterUnits(value).toFixed(2);
   }
 
   private formatInteger(value: number): string {
     return Math.round(value).toString();
+  }
+
+  private formatMillimeters(value: number): string {
+    return this.toPlotterUnitsFromMillimeters(value).toFixed(2);
+  }
+
+  private toPlotterUnits(value: number): number {
+    if (this.unit === 'mm') {
+      return this.toPlotterUnitsFromMillimeters(value);
+    }
+
+    if (this.unit === 'cm') {
+      return this.toPlotterUnitsFromMillimeters(value * 10);
+    }
+
+    const safeDpi = this.dpi > 0 ? this.dpi : 300;
+    return this.toPlotterUnitsFromMillimeters((value * 25.4) / safeDpi);
+  }
+
+  private toPlotterUnitsFromMillimeters(value: number): number {
+    return value * PLOTTER_UNITS_PER_MM;
   }
 }

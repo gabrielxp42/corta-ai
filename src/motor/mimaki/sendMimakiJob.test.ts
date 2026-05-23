@@ -7,7 +7,7 @@ const documentSettings: DocumentSettings = {
   width: 1000,
   height: 1000,
   dpi: 300,
-  unit: 'px',
+  unit: 'mm',
   background: '#000',
   cutSettings: {
     name: 'Vinil Adesivo',
@@ -40,8 +40,9 @@ describe('sendMimakiJob', () => {
     const prepared = prepareMimakiJob(elements, documentSettings);
 
     expect(prepared.payload).toContain('IN;');
-    expect(prepared.payload).toContain('ZX29.63;');
-    expect(prepared.payload).toContain('PD1189.33,4.00;');
+    expect(prepared.payload).toContain('ZX1185.20;');
+    expect(prepared.payload).toContain('CT1;');
+    expect(prepared.payload).toContain('PD47573.20,160.00;');
     expect(prepared.bytes).toBeGreaterThan(0);
   });
 
@@ -71,7 +72,7 @@ describe('sendMimakiJob', () => {
 
     expect(sendCalls).toBe(1);
     expect(capturedPayload).toContain('IN;');
-    expect(capturedPayload).toContain(';PU1585.33,0.00;');
+    expect(capturedPayload).toContain(';PU63413.20,0.00;');
     expect(result.success).toBe(true);
   });
 });

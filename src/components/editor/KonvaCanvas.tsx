@@ -141,7 +141,6 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
   const renderElement = (el: CanvasElement) => {
     const commonProps = {
       id: el.id,
-      key: el.id,
       x: el.x,
       y: el.y,
       rotation: el.rotation,
@@ -170,6 +169,7 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       const path = el as any;
       return (
         <Path
+          key={el.id}
           {...commonProps}
           data={path.data}
           stroke={path.stroke || '#00f2ff'}
@@ -189,9 +189,9 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
 
       switch (shape.shapeType) {
         case 'rectangle':
-          return <Rect {...commonProps} {...style} width={shape.width} height={shape.height} cornerRadius={shape.cornerRadius} />;
+          return <Rect key={el.id} {...commonProps} {...style} width={shape.width} height={shape.height} cornerRadius={shape.cornerRadius} />;
         case 'circle':
-          return <Circle {...commonProps} {...style} radius={shape.radius || 50} />;
+          return <Circle key={el.id} {...commonProps} {...style} radius={shape.radius || 50} />;
         default:
           return null;
       }
@@ -201,6 +201,7 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       const text = el as TextElement;
       return (
         <Text
+          key={el.id}
           {...commonProps}
           text={text.text}
           fontSize={text.fontSize}

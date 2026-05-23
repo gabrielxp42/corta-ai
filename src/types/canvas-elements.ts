@@ -73,6 +73,24 @@ export interface GroupElement {
   children: CanvasElement[];
 }
 
+export interface PathElement {
+  type: 'path';
+  id: string;
+  x: number;
+  y: number;
+  rotation: number;
+  scaleX: number;
+  scaleY: number;
+  visible: boolean;
+  locked: boolean;
+  name?: string;
+  data: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+}
+
 export interface ImageElement {
   type: 'image';
   id: string;
@@ -91,7 +109,7 @@ export interface ImageElement {
   opacity?: number;
 }
 
-export type CanvasElement = ImageElement | ShapeElement | TextElement | GroupElement;
+export type CanvasElement = ImageElement | ShapeElement | TextElement | GroupElement | PathElement;
 
 export interface LibraryItem {
   id: string;
