@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Stage, Layer, Rect, Circle, Text, Transformer, Path } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Text, Transformer, Path, Group } from 'react-konva';
 import { CanvasElement, ShapeElement, TextElement } from '../../types/canvas-elements';
 
 interface KonvaCanvasProps {
@@ -10,7 +10,13 @@ interface KonvaCanvasProps {
   onSelect: (ids: string[]) => void;
   onUpdateElement: (id: string, attrs: any) => void;
   zoom: number;
+  onZoomChange?: (zoom: number) => void;
+  mirrored?: boolean;
 }
+
+const MIN_ZOOM = 0.15;
+const MAX_ZOOM = 6;
+const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 
 export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
   elements,
@@ -19,12 +25,98 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
   selectedIds,
   onSelect,
   onUpdateElement,
-  zoom
+  zoom,
+  onZoomChange,
+  mirrored = false
 }) => {
   const stageRef = useRef<any>(null);
   const trRef = useRef<any>(null);
-  const [lastCenter, setLastCenter] = useState<any>(null);
-  const [lastDist, setLastDist] = useState(0);
+  const [viewportSize, setViewportSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight
+  });
+  const lastCenterRef = useRef<any>(null);
+  const lastDistRef = useRef(0);
+  const isPinchingRef = useRef(false);
+
+  const applyZoomAtPoint = (stage: any, nextZoom: number, focusPoint?: { x: number; y: number }) => {
+    const clampedZoom = clampZoom(nextZoom);
+    const targetPoint = focusPoint ?? {
+      x: viewportSize.width / 2,
+      y: viewportSize.height / 2,
+    };
+    const oldScale = stage.scaleX() || 1;
+    const pointTo = {
+      x: (targetPoint.x - stage.x()) / oldScale,
+      y: (targetPoint.y - stage.y()) / oldScale,
+    };
+
+    stage.scale({ x: clampedZoom, y: clampedZoom });
+    stage.position({
+      x: targetPoint.x - pointTo.x * clampedZoom,
+      y: targetPoint.y - pointTo.y * clampedZoom,
+    });
+    stage.batchDraw();
+    onZoomChange?.(clampedZoom);
+  };
+
+  const fitCameraToCanvas = () => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const padding = 48;
+    const scale = clampZoom(
+      Math.min(
+        (viewportSize.width - padding * 2) / Math.max(width, 1),
+        (viewportSize.height - padding * 2) / Math.max(height, 1)
+      )
+    );
+
+    stage.scale({ x: scale, y: scale });
+    stage.position({
+      x: (viewportSize.width - width * scale) / 2,
+      y: (viewportSize.height - height * scale) / 2,
+    });
+    stage.batchDraw();
+    onZoomChange?.(scale);
+  };
+
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const currentScale = stage.scaleX() || 1;
+    if (Math.abs(currentScale - zoom) > 0.001) {
+      applyZoomAtPoint(stage, zoom);
+    }
+  }, [zoom]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    if (stage.x() === 0 && stage.y() === 0 && (stage.scaleX() === 1 || stage.scaleX() === 0)) {
+      fitCameraToCanvas();
+    }
+  }, [viewportSize.width, viewportSize.height, width, height]);
 
   const handleWheel = (e: any) => {
     e.evt.preventDefault();
@@ -39,15 +131,8 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       y: (pointer.y - stage.y()) / oldScale,
     };
 
-    const newScale = e.evt.deltaY < 0 ? oldScale * 1.1 : oldScale / 1.1;
-
-    stage.scale({ x: newScale, y: newScale });
-
-    const newPos = {
-      x: pointer.x - mousePointTo.x * newScale,
-      y: pointer.y - mousePointTo.y * newScale,
-    };
-    stage.position(newPos);
+    const newScale = e.evt.deltaY < 0 ? oldScale * 1.08 : oldScale / 1.08;
+    applyZoomAtPoint(stage, newScale, pointer);
   };
 
   const getDistance = (p1: any, p2: any) => {
@@ -61,12 +146,27 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     };
   };
 
-  const handleTouch = (e: any) => {
+  const handleTouchStart = (e: any) => {
     const touch1 = e.evt.touches[0];
     const touch2 = e.evt.touches[1];
 
     if (touch1 && touch2) {
       e.evt.preventDefault();
+      isPinchingRef.current = true;
+      const p1 = { x: touch1.clientX, y: touch1.clientY };
+      const p2 = { x: touch2.clientX, y: touch2.clientY };
+      lastCenterRef.current = getCenter(p1, p2);
+      lastDistRef.current = getDistance(p1, p2);
+    }
+  };
+
+  const handleTouchMove = (e: any) => {
+    const touch1 = e.evt.touches[0];
+    const touch2 = e.evt.touches[1];
+
+    if (touch1 && touch2) {
+      e.evt.preventDefault();
+      isPinchingRef.current = true;
       const stage = stageRef.current;
       if (stage.isDragging()) {
         stage.stopDrag();
@@ -75,40 +175,58 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       const p1 = { x: touch1.clientX, y: touch1.clientY };
       const p2 = { x: touch2.clientX, y: touch2.clientY };
 
-      if (!lastCenter) {
-        setLastCenter(getCenter(p1, p2));
-        setLastDist(getDistance(p1, p2));
+      if (!lastCenterRef.current) {
+        lastCenterRef.current = getCenter(p1, p2);
+        lastDistRef.current = getDistance(p1, p2);
         return;
       }
 
       const newDist = getDistance(p1, p2);
       const newCenter = getCenter(p1, p2);
+      if (!lastDistRef.current) {
+        lastDistRef.current = newDist;
+        lastCenterRef.current = newCenter;
+        return;
+      }
 
-      const distRatio = newDist / lastDist;
-      const scale = stage.scaleX() * distRatio;
+      const distRatio = newDist / lastDistRef.current;
+      const nextScale = clampZoom(stage.scaleX() * distRatio);
+      const dx = newCenter.x - lastCenterRef.current.x;
+      const dy = newCenter.y - lastCenterRef.current.y;
 
-      stage.scale({ x: scale, y: scale });
-
-      const dx = newCenter.x - lastCenter.x;
-      const dy = newCenter.y - lastCenter.y;
-
+      const pointTo = {
+        x: (newCenter.x - stage.x()) / (stage.scaleX() || 1),
+        y: (newCenter.y - stage.y()) / (stage.scaleY() || 1),
+      };
+      stage.scale({ x: nextScale, y: nextScale });
       const newPos = {
-        x: newCenter.x - (newCenter.x - stage.x()) * distRatio + dx,
-        y: newCenter.y - (newCenter.y - stage.y()) * distRatio + dy,
+        x: newCenter.x - pointTo.x * nextScale + dx,
+        y: newCenter.y - pointTo.y * nextScale + dy,
       };
 
       stage.position(newPos);
-      setLastDist(newDist);
-      setLastCenter(newCenter);
+      stage.batchDraw();
+      lastDistRef.current = newDist;
+      lastCenterRef.current = newCenter;
+      onZoomChange?.(nextScale);
     }
   };
 
-  const handleTouchEnd = () => {
-    setLastCenter(null);
-    setLastDist(0);
+  const handleTouchEnd = (e: any) => {
+    if (e.evt.touches.length < 2) {
+      lastCenterRef.current = null;
+      lastDistRef.current = 0;
+      window.setTimeout(() => {
+        isPinchingRef.current = false;
+      }, 40);
+    }
   };
 
   const handleSelect = (e: any) => {
+    if (isPinchingRef.current) {
+      return;
+    }
+
     const clickedOnEmpty = e.target === e.target.getStage();
     if (clickedOnEmpty) {
       onSelect([]);
@@ -120,10 +238,23 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
       return;
     }
 
+    const clickedElement = elements.find((element) => element.id === id);
+    const repeatGroupId = clickedElement?.repeatGroupId;
+    const targetIds = repeatGroupId
+      ? elements
+          .filter((element) => element.repeatGroupId === repeatGroupId)
+          .map((element) => element.id)
+      : [id];
+
     if (e.evt.shiftKey) {
-      onSelect(selectedIds.includes(id) ? selectedIds.filter(i => i !== id) : [...selectedIds, id]);
+      const alreadySelected = targetIds.every((targetId) => selectedIds.includes(targetId));
+      onSelect(
+        alreadySelected
+          ? selectedIds.filter((selectedId) => !targetIds.includes(selectedId))
+          : Array.from(new Set([...selectedIds, ...targetIds]))
+      );
     } else {
-      onSelect([id]);
+      onSelect(targetIds);
     }
   };
 
@@ -174,6 +305,8 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
           data={path.data}
           stroke={path.stroke || '#00f2ff'}
           strokeWidth={path.strokeWidth || 0.5}
+          lineCap="round"
+          lineJoin="round"
           fill={path.fill || 'transparent'}
         />
       );
@@ -221,29 +354,33 @@ export const KonvaCanvas: React.FC<KonvaCanvasProps> = ({
     <div className="bg-zinc-900 overflow-hidden rounded-lg border border-zinc-800 shadow-2xl w-full h-full flex items-center justify-center">
       <Stage
         ref={stageRef}
-        width={window.innerWidth}
-        height={window.innerHeight}
+        width={viewportSize.width}
+        height={viewportSize.height}
         draggable={selectedIds.length === 0}
         onWheel={handleWheel}
-        onTouchMove={handleTouch}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onMouseDown={handleSelect}
-        onTouchStart={handleSelect}
+        onTap={handleSelect}
+        onDblTap={fitCameraToCanvas}
       >
         <Layer>
-          <Rect
-            x={0}
-            y={0}
-            width={width}
-            height={height}
-            fill="#27272a"
-            stroke="#00f2ff"
-            strokeWidth={2 / zoom}
-            shadowBlur={20}
-            shadowColor="#000"
-          />
-          
-          {elements.map(renderElement)}
+          <Group x={mirrored ? width : 0} scaleX={mirrored ? -1 : 1}>
+            <Rect
+              x={0}
+              y={0}
+              width={width}
+              height={height}
+              fill="#27272a"
+              stroke="#00f2ff"
+              strokeWidth={2 / zoom}
+              shadowBlur={20}
+              shadowColor="#000"
+            />
+            
+            {elements.map(renderElement)}
+          </Group>
           
           <Transformer
             ref={trRef}

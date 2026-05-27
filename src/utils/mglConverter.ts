@@ -1,3 +1,5 @@
+import { snapMimakiPressure, snapMimakiSpeed } from './mimakiCutSettings';
+
 export interface Point {
   x: number;
   y: number;
@@ -7,6 +9,7 @@ export interface MGLSettings {
   speed?: number;
   pressure?: number;
   offset?: number;
+  overcutMm?: number;
   tool?: string;
   includeConditionCommands?: boolean;
 }
@@ -37,6 +40,7 @@ const rotatePoint = (point: Point, center: Point, angleDeg: number): Point => {
 
 export class MGLConverter {
   private commands: string[] = [];
+  private overcutMm = 0;
 
   constructor(
     private readonly dpi = 300,
@@ -47,16 +51,17 @@ export class MGLConverter {
 
   init(settings: MGLSettings = {}): void {
     this.commands = ['IN;', 'IP0,0,1,1;', `ZX${this.formatMillimeters(DEFAULT_ZX_MM)};`];
+    this.overcutMm = typeof settings.overcutMm === 'number' && settings.overcutMm > 0 ? settings.overcutMm : 0;
 
     if (settings.includeConditionCommands) {
       if (typeof settings.tool === 'string' && settings.tool.trim().length > 0) {
         this.commands.push(`${settings.tool.trim()};`);
       }
       if (typeof settings.speed === 'number' && settings.speed > 0) {
-        this.commands.push(`VS${this.formatInteger(settings.speed)};`);
+        this.commands.push(`VS${this.formatInteger(snapMimakiSpeed(settings.speed))};`);
       }
       if (typeof settings.pressure === 'number' && settings.pressure > 0) {
-        this.commands.push(`FS${this.formatInteger(settings.pressure)};`);
+        this.commands.push(`FS${this.formatInteger(snapMimakiPressure(settings.pressure, settings.tool))};`);
       }
     }
   }
@@ -95,6 +100,7 @@ export class MGLConverter {
       if (!this.samePoint(first, last)) {
         this.penDown(first.x, first.y);
       }
+      this.applyOvercut(normalized);
     }
   }
 
@@ -143,6 +149,31 @@ export class MGLConverter {
 
   getOutput(): string {
     return this.commands.join('\n');
+  }
+
+  private applyOvercut(points: Point[]): void {
+    if (this.overcutMm <= 0 || points.length < 2) {
+      return;
+    }
+
+    const first = points[0];
+    const second = points[1];
+    const dx = second.x - first.x;
+    const dy = second.y - first.y;
+    const length = Math.hypot(dx, dy);
+
+    if (length <= 0) {
+      return;
+    }
+
+    const overcutPoint = {
+      x: first.x + (dx / length) * this.overcutMm,
+      y: first.y + (dy / length) * this.overcutMm
+    };
+
+    if (!this.samePoint(first, overcutPoint)) {
+      this.penDown(overcutPoint.x, overcutPoint.y);
+    }
   }
 
   private compactPoints(points: Point[]): Point[] {

@@ -28,6 +28,7 @@ export interface ShapeElement {
   cornerRadius?: number;
   dash?: number[];
   dashEnabled?: boolean;
+  repeatGroupId?: string;
 }
 
 export interface TextElement {
@@ -56,6 +57,7 @@ export interface TextElement {
   align?: 'left' | 'center' | 'right';
   verticalAlign?: 'top' | 'middle' | 'bottom';
   opacity?: number;
+  repeatGroupId?: string;
 }
 
 export interface GroupElement {
@@ -71,6 +73,7 @@ export interface GroupElement {
   name?: string;
   opacity?: number;
   children: CanvasElement[];
+  repeatGroupId?: string;
 }
 
 export interface PathElement {
@@ -89,6 +92,7 @@ export interface PathElement {
   stroke?: string;
   strokeWidth?: number;
   opacity?: number;
+  repeatGroupId?: string;
 }
 
 export interface ImageElement {
@@ -107,6 +111,7 @@ export interface ImageElement {
   locked: boolean;
   name?: string;
   opacity?: number;
+  repeatGroupId?: string;
 }
 
 export type CanvasElement = ImageElement | ShapeElement | TextElement | GroupElement | PathElement;
@@ -124,7 +129,11 @@ export interface CutSettings {
   speed: number;
   pressure: number;
   offset: number;
+  overcutMm: number;
 }
+
+export type CutConditionMode = 'machine' | 'preset' | 'manual';
+export type CutTraversalMode = 'mimaki' | 'ltr' | 'serpentine';
 
 export interface DocumentSettings {
   width: number;
@@ -132,11 +141,14 @@ export interface DocumentSettings {
   dpi: number;
   unit: 'px' | 'cm' | 'mm';
   background: string;
+  mirror?: boolean;
   aspectRatio?: string;
   widthCm?: number;
   heightCm?: number;
   name?: string;
   backgroundColor?: 'transparent' | 'white' | 'black';
+  cutConditionMode?: CutConditionMode;
+  cutTraversalMode?: CutTraversalMode;
   cutSettings?: CutSettings;
 }
 

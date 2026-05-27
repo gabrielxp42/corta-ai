@@ -45,6 +45,39 @@ describe('MGLConverter', () => {
     expect(output).toContain('FS50;');
   });
 
+  it('arredonda velocidade e pressao para os passos reais da Mimaki', () => {
+    const converter = new MGLConverter(300, 'mm');
+
+    converter.init({
+      tool: 'CT1',
+      speed: 22,
+      pressure: 57,
+      includeConditionCommands: true
+    });
+    converter.addPolyline([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 }
+    ]);
+    converter.finish();
+
+    const output = converter.getOutput();
+
+    expect(output).toContain('VS20;');
+    expect(output).toContain('FS55;');
+  });
+
+  it('aplica sobrecorte em caminhos fechados', () => {
+    const converter = new MGLConverter(300, 'mm');
+
+    converter.init({ overcutMm: 0.2 });
+    converter.addRectangle(0, 0, 10, 10);
+    converter.finish();
+
+    const output = converter.getOutput();
+
+    expect(output).toContain('PD0.00,8.00;');
+  });
+
   it('fecha circulo aproximado sem duplicar pontos consecutivos', () => {
     const converter = new MGLConverter(300, 'mm');
 

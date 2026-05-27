@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Optional
+from urllib.parse import parse_qs, urlparse
 
 
 DLL_PATH = Path(r"C:\Program Files\Adobe\Adobe Illustrator 2024\Plug-ins\Mimaki FineCut\USBFunction.dll")
@@ -194,8 +195,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        clean_path = self.path.split('?')[0].rstrip('/')
+        parsed_url = urlparse(self.path)
+        clean_path = parsed_url.path.rstrip('/')
         if not clean_path: clean_path = "/"
+        query = parse_qs(parsed_url.query)
         
         print(f"GET request received: {self.path} (clean: {clean_path})")
         
@@ -236,15 +239,18 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 # Scaneia a pasta public do projeto
                 public_dir = Path(__file__).parent.parent / "public"
+                requested_dir = query.get("dir", [""])[0].strip().strip("/\\")
+                target_dir = (public_dir / requested_dir) if requested_dir else public_dir
+
                 print(f"Scanning directory: {public_dir.absolute()}")
                 files = []
                 
-                if not public_dir.exists():
-                    print(f"Directory {public_dir} does not exist!")
-                    self._json(404, {"ok": False, "error": f"Diretorio public nao encontrado em {public_dir.absolute()}"})
+                if not target_dir.exists():
+                    print(f"Directory {target_dir} does not exist!")
+                    self._json(404, {"ok": False, "error": f"Diretorio nao encontrado em {target_dir.absolute()}"})
                     return
                 
-                for p in public_dir.rglob("*"):
+                for p in target_dir.rglob("*"):
                     if p.is_file():
                         # Ignora arquivos de sistema ou ocultos
                         if p.name.startswith(".") or "node_modules" in str(p):
@@ -260,7 +266,14 @@ class Handler(BaseHTTPRequestHandler):
                         })
                 
                 print(f"Found {len(files)} files in library")
-                self._json(200, {"ok": True, "files": sorted(files, key=lambda x: x["name"])})
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        "requestedDir": requested_dir or ".",
+                        "files": sorted(files, key=lambda x: x["name"])
+                    }
+                )
             except Exception as e:
                 print(f"Error in /library: {e}")
                 self._json(500, {"ok": False, "error": str(e)})
@@ -325,7 +338,7 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Mimaki bridge online em http://{HOST}:{PORT}")
-    print("Rotas: GET /health, GET /devices, POST /send")
+    print("Rotas: GET /health, GET /devices, GET /library, POST /send")
 
     def shutdown_handler(*_args):
         server.shutdown()

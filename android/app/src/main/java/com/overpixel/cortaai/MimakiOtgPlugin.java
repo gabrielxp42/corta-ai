@@ -301,10 +301,8 @@ public class MimakiOtgPlugin extends Plugin {
             return "Mimaki OTG desconectada.";
         }
 
-        return "Conectada: interface=" + dataInterface.getId() +
-            ", endpointOut=0x" + Integer.toHexString(dataOutEndpoint.getAddress()) +
-            ", vendor=0x" + Integer.toHexString(currentDevice.getVendorId()) +
-            ", product=0x" + Integer.toHexString(currentDevice.getProductId());
+        return "Mimaki pronta! Certifique-se de que a máquina está em modo REMOTE. " +
+            "(ID: " + Integer.toHexString(currentDevice.getVendorId()) + ":" + Integer.toHexString(currentDevice.getProductId()) + ")";
     }
 
     private void registerUsbReceiver() {

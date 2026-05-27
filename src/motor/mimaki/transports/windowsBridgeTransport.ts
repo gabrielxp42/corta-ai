@@ -2,12 +2,14 @@ import { MimakiTransport, SendJobOptions, SendJobResult } from '../transport';
 
 const BRIDGE_URL = 'http://127.0.0.1:17871';
 
-interface BridgeHealthResponse {
+export interface BridgeHealthResponse {
   ok: boolean;
   connected: boolean;
   device?: {
+    index?: number;
     name: string;
     path: string;
+    stateFlag?: number;
   };
 }
 
@@ -61,6 +63,21 @@ export class WindowsBridgeTransport implements MimakiTransport {
       return Boolean(data.ok && data.connected);
     } catch {
       return false;
+    }
+  }
+
+  async getHealth(): Promise<BridgeHealthResponse | null> {
+    try {
+      const response = await fetchWithTimeout(`${BRIDGE_URL}/health`, {
+        method: 'GET',
+      });
+      if (!response.ok) {
+        return null;
+      }
+
+      return (await response.json()) as BridgeHealthResponse;
+    } catch {
+      return null;
     }
   }
 

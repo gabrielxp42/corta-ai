@@ -3,17 +3,19 @@ import { AndroidOtgTransport } from './transports/androidOtgTransport';
 import { sendMimakiJob } from './sendMimakiJob';
 
 const smokeTestSettings: DocumentSettings = {
-  width: 1000,
-  height: 1000,
+  width: 100,
+  height: 100,
   dpi: 300,
-  unit: 'px',
+  unit: 'mm',
   background: '#000',
+  mirror: false,
   cutSettings: {
     name: 'Smoke Test',
     tool: 'CT1',
     speed: 20,
     pressure: 50,
-    offset: 0.3
+    offset: 0.3,
+    overcutMm: 0.2
   }
 };
 
@@ -22,15 +24,17 @@ const smokeTestElements: CanvasElement[] = [
     id: 'smoke-rect',
     type: 'shape',
     shapeType: 'rectangle',
-    x: 4,
-    y: 4,
-    width: 120,
-    height: 80,
+    x: 10,
+    y: 10,
+    width: 50,
+    height: 30,
     rotation: 0,
     scaleX: 1,
     scaleY: 1,
     visible: true,
-    locked: false
+    locked: false,
+    stroke: '#00f2ff',
+    strokeWidth: 1
   }
 ];
 

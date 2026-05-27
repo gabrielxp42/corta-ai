@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "assets:manifest": "node tools/generate_asset_manifest.mjs",
+    "build": "npm run assets:manifest && tsc && vite build",
     "preview": "vite preview",
     "bridge:windows": "python tools/mimaki_bridge_server.py",
     "check": "tsc --noEmit",
